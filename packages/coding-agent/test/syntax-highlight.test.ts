@@ -1,4 +1,4 @@
-import { resetCapabilitiesCache, setCapabilities } from "@earendil-works/pi-tui";
+import { Markdown, resetCapabilitiesCache, setCapabilities, stripTerminalSequences } from "@earendil-works/pi-tui";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { getMarkdownTheme, highlightCode, initTheme, theme } from "../src/modes/interactive/theme/theme.ts";
 import {
@@ -94,6 +94,24 @@ describe("theme syntax highlighting", () => {
 
 	afterEach(() => {
 		resetCapabilitiesCache();
+	});
+
+	it("renders code flush with its fence while preserving source indentation and message padding", () => {
+		for (const language of ["typescript", "unsupported"]) {
+			const markdown = new Markdown(
+				`\`\`\`${language}\nouter()\n  inner()\n\`\`\``,
+				1,
+				0,
+				getMarkdownTheme(),
+				undefined,
+				{ formatCode: false },
+			);
+			const lines = markdown.render(80).map((line) => stripTerminalSequences(line).trimEnd());
+			expect(lines).toContain(` \`\`\`${language}`);
+			expect(lines).toContain(" outer()");
+			expect(lines).toContain("   inner()");
+			expect(lines).toContain(" ```");
+		}
 	});
 
 	// #10143
