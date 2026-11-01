@@ -112,7 +112,7 @@ See [Compaction Reference](compaction.md) for trigger, summarization, and valida
 | `terminal.trueColor` | `boolean \| "auto"` | `"auto"` | Override true-color detection. |
 | `images.autoResize` | boolean | `true` | Resize images to at most 2000 by 2000 pixels before sending them to a model. |
 | `images.blockImages` | boolean | `false` | Prevent images from being sent to models. |
-| `markdown.codeBlockIndent` | string | `"  "` | Prefix used to indent rendered code blocks. |
+| `markdown.codeBlockIndent` | string | `""` | Prefix used to indent rendered code blocks. |
 | `markdown.mermaid` | `"off" \| "final" \| "streaming"` | `"streaming"` | Mermaid rendering mode. |
 
 See [Themes](themes.md) and [Terminal Setup](terminal-setup.md) for format and platform details.

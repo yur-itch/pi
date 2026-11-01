@@ -1,5 +1,6 @@
 import { Markdown, resetCapabilitiesCache, setCapabilities, stripTerminalSequences } from "@earendil-works/pi-tui";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { SettingsManager } from "../src/core/settings-manager.ts";
 import { getMarkdownTheme, highlightCode, initTheme, theme } from "../src/modes/interactive/theme/theme.ts";
 import {
 	highlight,
@@ -96,13 +97,13 @@ describe("theme syntax highlighting", () => {
 		resetCapabilitiesCache();
 	});
 
-	it("renders code flush with its fence while preserving source indentation and message padding", () => {
+	it("renders code flush with its fence using the interactive settings override", () => {
 		for (const language of ["typescript", "unsupported"]) {
 			const markdown = new Markdown(
 				`\`\`\`${language}\nouter()\n  inner()\n\`\`\``,
 				1,
 				0,
-				getMarkdownTheme(),
+				{ ...getMarkdownTheme(), codeBlockIndent: SettingsManager.inMemory().getCodeBlockIndent() },
 				undefined,
 				{ formatCode: false },
 			);

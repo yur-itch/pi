@@ -593,7 +593,7 @@
       "properties": {
         "codeBlockIndent": {
           "type": "string",
-          "default": "  "
+          "default": ""
         },
         "mermaid": {
           "anyOf": [

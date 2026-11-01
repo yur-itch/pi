@@ -577,6 +577,20 @@ describe("SettingsManager", () => {
 		});
 	});
 
+	describe("markdown.codeBlockIndent", () => {
+		it("defaults to no extra code block inset", () => {
+			expect(SettingsManager.create(projectDir, agentDir).getCodeBlockIndent()).toBe("");
+			expect(SettingsManager.inMemory().getCodeBlockIndent()).toBe("");
+		});
+
+		it("preserves explicitly configured prefixes", () => {
+			for (const codeBlockIndent of ["", "  ", "\t"]) {
+				writeFileSync(join(agentDir, "settings.json"), JSON.stringify({ markdown: { codeBlockIndent } }));
+				expect(SettingsManager.create(projectDir, agentDir).getCodeBlockIndent()).toBe(codeBlockIndent);
+			}
+		});
+	});
+
 	describe("markdown.mermaid", () => {
 		it("defaults to streaming and persists rendering modes", async () => {
 			const manager = SettingsManager.create(projectDir, agentDir);

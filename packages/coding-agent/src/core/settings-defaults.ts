@@ -48,7 +48,7 @@ export const SETTINGS_DEFAULTS = {
 	outputPad: 1,
 	autocompleteMaxVisible: 5,
 	markdown: {
-		codeBlockIndent: "  ",
+		codeBlockIndent: "",
 		mermaid: "streaming",
 	},
 	warnings: {
