@@ -1,5 +1,6 @@
 import { Marked, type Token, Tokenizer, type TokenizerExtension, type Tokens, type TokensList } from "marked";
 import markedCjkFriendly from "marked-cjk-friendly";
+import { codeFormatter, requestCodeFormatRender } from "../code-formatter.ts";
 import { renderLatex } from "../latex.ts";
 import { getCapabilities, hyperlink, isImageLine } from "../terminal-image.ts";
 import type { Component } from "../tui.ts";
@@ -257,6 +258,8 @@ export interface MarkdownOptions {
 	preserveBackslashEscapes?: boolean;
 	/** Transform source Markdown before parsing, with the exact width available for content. */
 	transform?: (markdown: string, availableWidth: number) => string;
+	/** Format closed code fences for the available width before highlighting (default: true). */
+	formatCode?: boolean;
 	/** Render supported LaTeX math expressions as Unicode text (default: true). */
 	renderLatex?: boolean;
 }
@@ -274,6 +277,13 @@ interface RenderedBlock {
 	lines: string[];
 	/** Highlighted lines of the block's code, keyed by language and source; they survive a resize or new spacing. */
 	highlightedCode: Map<string, string[]>;
+	pendingFormats: Set<Promise<string>>;
+}
+
+function isClosedCodeFence(token: Tokens.Code): boolean {
+	const opening = /^ {0,3}(`{3,}|~{3,})[^\n]*\n/.exec(token.raw)?.[1];
+	const closing = /^ {0,3}(`+|~+)[ \t]*$/.exec(token.raw.trimEnd().split("\n").at(-1) ?? "")?.[1];
+	return !!opening && !!closing && closing[0] === opening[0] && closing.length >= opening.length;
 }
 
 export class Markdown implements Component {
@@ -300,6 +310,9 @@ export class Markdown implements Component {
 	private blocks?: WeakRef<Map<string, RenderedBlock>>;
 	// Highlighted code of the block being rendered, only set while renderBlock runs.
 	private blockHighlightedCode?: Map<string, string[]>;
+	private blockPendingFormats?: Set<Promise<string>>;
+	private activeFormats = new Set<Promise<string>>();
+	private readonly watchedFormats = new WeakSet<Promise<string>>();
 
 	constructor(
 		text: string,
@@ -356,16 +369,13 @@ export class Markdown implements Component {
 			return result;
 		}
 
-		// Replace tabs with 3 spaces for consistent rendering
-		const normalizedText = text.replace(/\t/g, "   ");
-
-		// Parse markdown to HTML-like tokens
+		// Preserve source tabs for the formatter, including tabs inside string literals. Expand them only for display.
 		const cached = this.cachedTokens?.deref();
-		let tokens = cached?.source === normalizedText ? cached.tokens : undefined;
+		let tokens = cached?.source === text ? cached.tokens : undefined;
 		if (!tokens) {
-			tokens = markdownParser.lexer(normalizedText);
+			tokens = markdownParser.lexer(text);
 			trimPartialClosingFences(tokens);
-			this.cachedTokens = new WeakRef({ source: normalizedText, tokens });
+			this.cachedTokens = new WeakRef({ source: text, tokens });
 		}
 
 		// A reference link resolves through a definition anywhere in the text, so blocks with the same source can render
@@ -375,14 +385,22 @@ export class Markdown implements Component {
 		const blocks = new Map<string, RenderedBlock>();
 		this.blocks = new WeakRef(blocks);
 		const contentLines: string[] = [];
+		this.activeFormats = new Set();
 		for (let i = 0; i < tokens.length; i++) {
 			const token = tokens[i];
 			const nextTokenType = tokens[i + 1]?.type;
 			const reused = reuseBlocks ? (blocks.get(token.raw) ?? previousBlocks?.get(token.raw)) : undefined;
-			const block = reused ?? { width: -1, nextTokenType, lines: [], highlightedCode: new Map() };
+			const block = reused ?? {
+				width: -1,
+				nextTokenType,
+				lines: [],
+				highlightedCode: new Map(),
+				pendingFormats: new Set(),
+			};
 			if (block.width !== width || block.nextTokenType !== nextTokenType) {
 				this.renderBlock(block, token, nextTokenType, width, contentWidth);
 			}
+			for (const pending of block.pendingFormats) this.activeFormats.add(pending);
 			if (reuseBlocks) blocks.set(token.raw, block);
 			for (const line of block.lines) {
 				contentLines.push(line);
@@ -419,6 +437,8 @@ export class Markdown implements Component {
 		contentWidth: number,
 	): void {
 		this.blockHighlightedCode = block.highlightedCode;
+		block.pendingFormats.clear();
+		this.blockPendingFormats = block.pendingFormats;
 		const leftMargin = " ".repeat(this.paddingX);
 		const rightMargin = " ".repeat(this.paddingX);
 		const bgFn = this.defaultTextStyle?.bgColor;
@@ -440,6 +460,7 @@ export class Markdown implements Component {
 			}
 		}
 		this.blockHighlightedCode = undefined;
+		this.blockPendingFormats = undefined;
 		flattenLines(lines);
 		block.lines = lines;
 		block.width = width;
@@ -601,12 +622,26 @@ export class Markdown implements Component {
 
 			case "code": {
 				const indent = this.theme.codeBlockIndent ?? "  ";
+				let code = token.text;
+				if (this.options.formatCode !== false && isClosedCodeFence(token as Tokens.Code)) {
+					const formatted = codeFormatter.format(code, token.lang, Math.max(1, width - visibleWidth(indent)));
+					if (typeof formatted === "string") {
+						code = formatted;
+					} else {
+						this.blockPendingFormats?.add(formatted);
+						this.watchFormat(formatted);
+					}
+				}
+				code = code.replace(/\t/g, "   ");
 				lines.push(this.theme.codeBlockBorder(`\`\`\`${token.lang || ""}`));
 				if (this.theme.highlightCode) {
-					const key = `${token.lang ?? ""}\0${token.text}`;
+					const key = `${token.lang ?? ""}\0${code}`;
 					let highlighted = this.blockHighlightedCode?.get(key);
 					if (!highlighted) {
-						highlighted = this.theme.highlightCode(token.text, token.lang);
+						highlighted = this.theme.highlightCode(code, token.lang);
+						if (this.blockHighlightedCode && this.blockHighlightedCode.size >= 4) {
+							this.blockHighlightedCode.delete(this.blockHighlightedCode.keys().next().value!);
+						}
 						this.blockHighlightedCode?.set(key, highlighted);
 					}
 					for (const hlLine of highlighted) {
@@ -614,7 +649,7 @@ export class Markdown implements Component {
 					}
 				} else {
 					// Split code by newlines and style each line
-					const codeLines = token.text.split("\n");
+					const codeLines = code.split("\n");
 					for (const codeLine of codeLines) {
 						lines.push(`${indent}${this.theme.codeBlock(codeLine)}`);
 					}
@@ -733,7 +768,26 @@ export class Markdown implements Component {
 				}
 		}
 
-		return lines;
+		return lines.map((line) => line.replace(/\t/g, "   "));
+	}
+
+	private watchFormat(pending: Promise<string>): void {
+		if (this.watchedFormats.has(pending)) return;
+		this.watchedFormats.add(pending);
+		const owner = new WeakRef(this);
+		void pending.then(() => {
+			const markdown = owner.deref();
+			// A resize or source update may already have replaced the request this result belongs to.
+			if (!markdown?.activeFormats.has(pending)) return;
+			markdown.clearRenderCache();
+			const blocks = markdown.blocks?.deref();
+			if (blocks) {
+				for (const block of blocks.values()) {
+					if (block.pendingFormats.has(pending)) block.width = -1;
+				}
+			}
+			requestCodeFormatRender();
+		});
 	}
 
 	private renderInlineTokens(tokens: Token[], styleContext?: InlineStyleContext): string {
@@ -842,7 +896,7 @@ export class Markdown implements Component {
 			result = result.slice(0, -stylePrefix.length);
 		}
 
-		return result;
+		return result.replace(/\t/g, "   ");
 	}
 
 	private getOrderedListMarker(item: Tokens.ListItem): string | undefined {

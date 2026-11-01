@@ -52,6 +52,10 @@
 	},
 	"types": "./dist/index.d.ts",
 	"dependencies": {
+		"@dprint/formatter": "0.6.0",
+		"@dprint/json": "0.25.2",
+		"@dprint/ruff": "0.11.3",
+		"@dprint/typescript": "0.96.1",
 		"get-east-asian-width": "1.6.0",
 		"marked": "18.0.11",
 		"marked-cjk-friendly": "0.1.2"

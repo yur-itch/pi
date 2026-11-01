@@ -4,6 +4,7 @@
 
 ### Added
 
+- Added display-only, width-aware formatting for closed JS/TS/JSX/TSX, JSON/JSONC, and Python code fences. Formatting runs in lazily loaded WASM workers, with 8-column width buckets and separate bounded result and runtime LRUs. Remaining overflow still wraps. Set `MarkdownOptions.formatCode` to `false` to disable it
 - Added `replaceControlCharacters()` to replace runs of C0 and C1 control characters with a space
 - Added `Component.capturesViewportInput`. While a component that sets it has focus, `TuiAltScreen` sends viewport keys such as PageUp/PageDown to it instead of scrolling the transcript, as it already does for focused overlays. `SelectList`, `SettingsList`, and `Editor` with open autocomplete set it ([#7629](https://github.com/earendil-works/pi/issues/7629), based on [#7680](https://github.com/earendil-works/pi/pull/7680) by [@muyiyr](https://github.com/muyiyr))
 - Added `getSelectPageIndex()` to compute the selection after a `tui.select.pageUp` or `tui.select.pageDown` key ([#7629](https://github.com/earendil-works/pi/issues/7629), based on [#7680](https://github.com/earendil-works/pi/pull/7680) by [@muyiyr](https://github.com/muyiyr))

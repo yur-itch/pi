@@ -529,8 +529,28 @@ md.setText("Updated markdown");
 - Headings, bold, italic, code blocks, lists, links, blockquotes
 - HTML tags rendered as plain text
 - Optional syntax highlighting via `highlightCode`
+- Width-aware source formatting of closed JS/TS/JSX/TSX, JSON/JSONC, and Python code fences
 - Padding support
 - Render caching for performance
+
+Code fences are formatted for the available content width before syntax highlighting. Formatting uses
+bundled dprint WASM plugins in workers, loaded only when needed; no project configuration or plugins are
+executed. The first frame shows the original code, then an active TUI automatically redraws when formatting
+finishes. Open streaming fences remain unchanged until their closing fence arrives. Unsupported languages,
+invalid snippets, and any lines still too wide after formatting use the normal wrapping behavior. Source
+messages are never changed.
+
+Formatting results use 8-column width buckets (rounded down after subtracting code indentation and enclosing
+list/quote prefixes), with a 256-entry, 4 MiB LRU cache of plain source strings. A separate LRU keeps at most
+two language workers; idle workers expire after 30 seconds. Requests are coalesced and limited to 64 pending
+snippets of at most 128 KiB each (measured as UTF-16 storage). Formatting has a 5-second timeout. Closing the
+last active TUI releases workers and cancels pending requests, while completed results remain cached.
+
+Disable display formatting for a Markdown component with its sixth constructor argument:
+
+```typescript
+const md = new Markdown(source, 1, 0, theme, undefined, { formatCode: false });
+```
 
 ### Loader
 

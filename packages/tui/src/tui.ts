@@ -3,6 +3,7 @@
  */
 
 import { performance } from "node:perf_hooks";
+import { onCodeFormatRender } from "./code-formatter.ts";
 import { isKeyRelease, matchesKey } from "./keys.ts";
 import type { Terminal } from "./terminal.ts";
 import {
@@ -514,6 +515,7 @@ export abstract class TuiBase extends Container implements TUI {
 	public terminal: Terminal;
 	private focusedComponent: Component | null = null;
 	private inputListeners = new Set<TuiInputListener>();
+	private unsubscribeCodeFormat?: () => void;
 
 	/** Global callback for debug key (Shift+Ctrl+D). Called before input is forwarded to focused component. */
 	public onDebug?: () => void;
@@ -955,6 +957,7 @@ export abstract class TuiBase extends Container implements TUI {
 
 	start(): void {
 		this.stopped = false;
+		this.unsubscribeCodeFormat ??= onCodeFormatRender(() => this.requestRender());
 		process.off("exit", this.exitRestoreHandler);
 		process.on("exit", this.exitRestoreHandler);
 		this.beforeTerminalStart();
@@ -1020,6 +1023,8 @@ export abstract class TuiBase extends Container implements TUI {
 		this.terminal.showCursor();
 		this.terminal.stop();
 		this.afterTerminalStop(options);
+		this.unsubscribeCodeFormat?.();
+		this.unsubscribeCodeFormat = undefined;
 	}
 
 	renderNow(force = false): void {
