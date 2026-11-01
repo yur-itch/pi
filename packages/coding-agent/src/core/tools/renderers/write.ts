@@ -15,7 +15,7 @@ import {
 	type Theme,
 } from "../../../modes/interactive/theme/theme.ts";
 import type { ToolDefinition, ToolRenderResultOptions } from "../../extensions/types.ts";
-import { normalizeDisplayText, renderToolPath, replaceTabs, str } from "../render-utils.ts";
+import { normalizeDisplayText, renderToolPath, str } from "../render-utils.ts";
 
 type WriteHighlightCache = {
 	rawPath: string | null;
@@ -54,8 +54,7 @@ function refreshWriteHighlightPrefix(cache: WriteHighlightCache, highlighter: Co
 function rebuildWriteHighlightCacheFull(rawPath: string | null, fileContent: string): WriteHighlightCache | undefined {
 	const lang = rawPath ? getLanguageFromPath(rawPath) : undefined;
 	if (!lang) return undefined;
-	const displayContent = normalizeDisplayText(fileContent);
-	const normalized = replaceTabs(displayContent);
+	const normalized = normalizeDisplayText(fileContent);
 	return {
 		rawPath,
 		lang,
@@ -79,8 +78,7 @@ function updateWriteHighlightCacheIncremental(
 	if (fileContent.length === cache.rawContent.length) return cache;
 
 	const deltaRaw = fileContent.slice(cache.rawContent.length);
-	const deltaDisplay = normalizeDisplayText(deltaRaw);
-	const deltaNormalized = replaceTabs(deltaDisplay);
+	const deltaNormalized = normalizeDisplayText(deltaRaw);
 	cache.rawContent = fileContent;
 	if (cache.normalizedLines.length === 0) {
 		cache.normalizedLines.push("");
@@ -123,14 +121,14 @@ function formatWriteCall(
 	} else if (fileContent) {
 		const lang = rawPath ? getLanguageFromPath(rawPath) : undefined;
 		const renderedLines = lang
-			? (cache?.highlightedLines ?? highlighter.highlight(replaceTabs(normalizeDisplayText(fileContent)), lang))
+			? (cache?.highlightedLines ?? highlighter.highlight(normalizeDisplayText(fileContent), lang))
 			: normalizeDisplayText(fileContent).split("\n");
 		const lines = trimTrailingEmptyLines(renderedLines);
 		const totalLines = lines.length;
 		const maxLines = options.expanded ? lines.length : 10;
 		const displayLines = lines.slice(0, maxLines);
 		const remaining = lines.length - maxLines;
-		text += `\n\n${displayLines.map((line) => (lang ? line : theme.fg("toolOutput", replaceTabs(line)))).join("\n")}`;
+		text += `\n\n${displayLines.map((line) => (lang ? line : theme.fg("toolOutput", line))).join("\n")}`;
 		if (remaining > 0) {
 			text += `${theme.fg("muted", `\n... (${remaining} more lines, ${totalLines} total,`)} ${keyHint("app.tools.expand", "to expand")}${theme.fg("muted", ")")}`;
 		}

@@ -3,6 +3,8 @@ import assert from "node:assert/strict";
 import { once } from "node:events";
 import { afterEach, describe, it } from "node:test";
 import { CodeFormatter, type CodeFormatterOptions } from "../src/code-formatter.ts";
+import { withTerminalWidth } from "../src/tab-width.ts";
+import { visibleWidth } from "../src/utils.ts";
 
 const formatters: CodeFormatter[] = [];
 function createFormatter(options?: CodeFormatterOptions): CodeFormatter {
@@ -43,7 +45,7 @@ describe("Code formatter", () => {
 		const formatted = await formatter.format(source, "ts", 39);
 		assert.notEqual(formatted, source);
 		assert.ok(formatted.includes("\n"));
-		assert.ok(formatted.split("\n").every((line) => line.length <= 32));
+		assert.ok(formatted.split("\n").every((line) => visibleWidth(line) <= 32));
 		assert.ok(formatter.format(source, "js", 39) instanceof Promise);
 		assert.ok(formatter.format(`${source};\nconst extra=1`, "ts", 39) instanceof Promise);
 	});
@@ -60,6 +62,41 @@ describe("Code formatter", () => {
 			assert.notEqual(result, source, language);
 			assert.ok(result.includes(expected), `${language}: ${result}`);
 		}
+	});
+
+	it("emits indentation tabs for all supported formatter families and file types", async () => {
+		const formatter = createFormatter();
+		for (const [language, source] of [
+			["js", "function example(){if(active){run(firstArgument,secondArgument)}}"],
+			["ts", "function example(){if(active){run(firstArgument,secondArgument)}}"],
+			["jsx", "function example(){return <div title='hello'><span>world</span></div>}"],
+			["tsx", "function example(){return <div title='hello'><span>world</span></div>}"],
+			["json", '{"outer":{"firstArgument":1,"secondArgument":2,"thirdArgument":3}}'],
+			["jsonc", '{"outer":{"firstArgument":1,"secondArgument":2,"thirdArgument":3}}'],
+			["py", "def example():\n    if active:\n        run(first_argument, second_argument)"],
+		]) {
+			const formatted = await formatter.format(source, language, 40);
+			assert.notEqual(formatted, source, language);
+			assert.match(formatted, /^\t+\S/m, language);
+		}
+	});
+
+	it("keys pending and cached formatting by the terminal tab width, not only the code width", async () => {
+		const formatter = createFormatter();
+		const source = "function example(){if(active){run(firstArgument,secondArgument,thirdArgument)}}";
+		const narrow = withTerminalWidth(95, () => formatter.format(source, "ts", 40));
+		const wide = withTerminalWidth(96, () => formatter.format(source, "ts", 40));
+		assert.ok(narrow instanceof Promise);
+		assert.ok(wide instanceof Promise);
+		assert.notEqual(narrow, wide);
+		const results = await Promise.all([narrow, wide]);
+		for (const [index, columns] of [95, 96].entries()) {
+			withTerminalWidth(columns, () => {
+				assert.ok(results[index].split("\n").every((line) => visibleWidth(line) <= 40));
+				assert.equal(formatter.format(source, "ts", 40), results[index]);
+			});
+		}
+		assert.equal(formatter["cache"].size, 2);
 	});
 
 	it("caches parser failures without changing original whitespace", async () => {

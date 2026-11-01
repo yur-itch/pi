@@ -116,6 +116,8 @@ export { oklabToOkhslLightness } from "./oklab.ts";
 export { formatProgramStatus, type ProgramStatus } from "./program-status.ts";
 // Input buffering for batch splitting
 export { StdinBuffer, type StdinBufferEventMap, type StdinBufferOptions } from "./stdin-buffer.ts";
+// Renderer-wide tab policy
+export { getTabWidth, withTerminalWidth } from "./tab-width.ts";
 // Terminal interface and implementations
 export { isAppleTerminalSession, ProcessTerminal, type Terminal } from "./terminal.ts";
 // Terminal colors
@@ -186,6 +188,7 @@ export { TuiAltScreen, type TuiAltScreenOptions } from "./tui-alt-screen.ts";
 export { TuiMainScreen, type TuiMainScreenRenderState } from "./tui-main-screen.ts";
 // Utilities
 export {
+	expandTabs,
 	getOsc8LinkAtColumn,
 	replaceControlCharacters,
 	sliceByColumn,

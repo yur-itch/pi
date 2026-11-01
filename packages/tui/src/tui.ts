@@ -5,6 +5,7 @@
 import { performance } from "node:perf_hooks";
 import { onCodeFormatRender } from "./code-formatter.ts";
 import { isKeyRelease, matchesKey } from "./keys.ts";
+import { getTabWidth, withComponentWidth, withTerminalWidth } from "./tab-width.ts";
 import type { Terminal } from "./terminal.ts";
 import {
 	parseOscColorResponse,
@@ -410,6 +411,10 @@ export class Container implements Component {
 	}
 
 	render(width: number): string[] {
+		return withComponentWidth(width, () => this.renderChildren(width));
+	}
+
+	private renderChildren(width: number): string[] {
 		const lines: string[] = [];
 		const mouseChildren: Array<{ component: Component; height: number }> = [];
 		for (const child of this.children) {
@@ -523,6 +528,7 @@ export abstract class TuiBase extends Container implements TUI {
 	private immediateRenderScheduled = false;
 	private renderTimer: NodeJS.Timeout | undefined;
 	private lastRenderAt = 0;
+	private lastTabWidth?: number;
 	private static readonly MIN_RENDER_INTERVAL_MS = 16;
 	private showHardwareCursor = false;
 	private clearOnShrink = false;
@@ -962,7 +968,7 @@ export abstract class TuiBase extends Container implements TUI {
 		process.on("exit", this.exitRestoreHandler);
 		this.beforeTerminalStart();
 		this.terminal.start(
-			(data) => this.handleTerminalInput(data),
+			(data) => withTerminalWidth(this.terminal.columns, () => this.handleTerminalInput(data)),
 			() => this.requestRender(),
 		);
 		this.afterTerminalStart();
@@ -1013,6 +1019,10 @@ export abstract class TuiBase extends Container implements TUI {
 	}
 
 	stop(options: TuiStopOptions = {}): void {
+		withTerminalWidth(this.terminal.columns, () => this.stopTerminal(options));
+	}
+
+	private stopTerminal(options: TuiStopOptions): void {
 		this.stopped = true;
 		process.off("exit", this.exitRestoreHandler);
 		this.cancelRenderTimer();
@@ -1032,7 +1042,16 @@ export abstract class TuiBase extends Container implements TUI {
 		this.renderRequested = false;
 		this.cancelRenderTimer();
 		this.lastRenderAt = performance.now();
-		this.doRender();
+		this.renderFrame();
+	}
+
+	private renderFrame(): void {
+		withTerminalWidth(this.terminal.columns, () => {
+			const tabWidth = getTabWidth();
+			if (this.lastTabWidth !== undefined && this.lastTabWidth !== tabWidth) this.invalidate();
+			this.lastTabWidth = tabWidth;
+			this.doRender();
+		});
 	}
 
 	requestRender(force = false): void {
@@ -1059,7 +1078,7 @@ export abstract class TuiBase extends Container implements TUI {
 			this.cancelRenderTimer();
 			this.renderRequested = false;
 			this.lastRenderAt = performance.now();
-			this.doRender();
+			this.renderFrame();
 		});
 	}
 
@@ -1082,7 +1101,7 @@ export abstract class TuiBase extends Container implements TUI {
 			}
 			this.renderRequested = false;
 			this.lastRenderAt = performance.now();
-			this.doRender();
+			this.renderFrame();
 			if (this.renderRequested) {
 				this.scheduleRender();
 			}

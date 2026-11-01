@@ -538,10 +538,12 @@ bundled dprint WASM plugins in workers, loaded only when needed; no project conf
 executed. The first frame shows the original code, then an active TUI automatically redraws when formatting
 finishes. Open streaming fences remain unchanged until their closing fence arrives. Unsupported languages,
 invalid snippets, and any lines still too wide after formatting use the normal wrapping behavior. Source
-messages are never changed.
+messages are never changed. Supported formatters emit indentation tabs and use the renderer's current tab
+width when choosing line breaks, including Python's tab-indentation mode.
 
 Formatting results use 8-column width buckets (rounded down after subtracting code indentation and enclosing
-list/quote prefixes), with a 256-entry, 4 MiB LRU cache of plain source strings. A separate LRU keeps at most
+list/quote prefixes), with a 256-entry, 4 MiB LRU cache of plain source strings. Cache keys also include the
+renderer tab width, so the same code-block width can be used in narrow and wide terminals. A separate LRU keeps at most
 two language workers; idle workers expire after 30 seconds. Requests are coalesced and limited to 64 pending
 snippets of at most 128 KiB each (measured as UTF-16 storage). Formatting has a 5-second timeout. Closing the
 last active TUI releases workers and cancels pending requests, while completed results remain cached.
@@ -773,6 +775,27 @@ if (matchesKey(data, Key.enter)) {
 `TuiAltScreen` owns a terminal-height viewport. Without an explicit layout root it preserves the legacy single-document scrolling behavior. With `setLayoutRoot()`, `VStack`, `HStack`, and nested `ScrollView` components can reserve fixed regions and independently scroll constrained regions. It updates changed viewport rows in place, follows streaming output while at the bottom, and preserves a manually selected scroll position while content grows. Mouse-wheel and configurable keyboard navigation scroll without modifying terminal scrollback, including jumps between OSC 133 semantic prompt markers. Scrollbars support hover expansion, thumb dragging, and track-click jumping. Clicking an OSC 8 hyperlink opens it with the configured URL handler. Dragging with the primary mouse button selects text and, unless `TuiAltScreenOptions.copyOnSelect` is `false`, copies it to the clipboard with OSC 52; holding the drag at a scroll view's top or bottom edge auto-scrolls and extends the selection into off-screen content. Kitty images support vertical viewport cropping; iTerm2 inline images fall back to text because the iTerm2 protocol cannot delete or crop placements during viewport repainting.
 
 Both renderers wrap updates in **synchronized output** (`\x1b[?2026h` ... `\x1b[?2026l`) for atomic, flicker-free rendering.
+
+### Adaptive tabs
+
+Visible tabs occupy **2 columns below 96 terminal columns**, or **4 columns at 96 columns and wider**.
+The policy is shared across the whole render/input operation: nested components, fixed-width overlays,
+Markdown, code fences, tool previews, diffs, width measurement, wrapping, slicing, and cursor hit-testing.
+Crossing the threshold invalidates mounted component caches. Tabs are expanded before terminal output,
+independently of the terminal's native tab stops; tabs inside OSC/APC control-sequence payloads are preserved.
+
+This changes display only. Existing spaces and the editor/input components' paste normalization are unchanged.
+Standalone `Text`, `Markdown`, and `Container` renders use their viewport width; utilities default to 2-column
+tabs outside a render. For standalone custom layout/measurement, use the same synchronous context explicitly:
+
+```typescript
+import { getTabWidth, visibleWidth, withTerminalWidth } from "@earendil-works/pi-tui";
+
+withTerminalWidth(120, () => {
+  getTabWidth();       // 4
+  visibleWidth("\tX"); // 5
+});
+```
 
 ## Terminal Interface
 

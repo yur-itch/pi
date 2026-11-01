@@ -1,4 +1,5 @@
 import { eastAsianWidth } from "get-east-asian-width";
+import { getTabWidth } from "./tab-width.ts";
 
 // segmenters (shared instance)
 const graphemeSegmenter = new Intl.Segmenter(undefined, { granularity: "grapheme" });
@@ -112,7 +113,7 @@ function truncateFragmentToWidth(text: string, maxWidth: number): { text: string
 		}
 
 		if (text[i] === "\t") {
-			if (width + 3 > maxWidth) {
+			if (width + getTabWidth() > maxWidth) {
 				break;
 			}
 			if (pendingAnsi) {
@@ -120,7 +121,7 @@ function truncateFragmentToWidth(text: string, maxWidth: number): { text: string
 				pendingAnsi = "";
 			}
 			result += "\t";
-			width += 3;
+			width += getTabWidth();
 			i++;
 			continue;
 		}
@@ -183,7 +184,7 @@ function graphemeWidth(segment: string): number {
 	if (segment.length === 1) {
 		const code = segment.charCodeAt(0);
 		if (code >= 0x20 && code <= 0x7e) return 1;
-		if (code === 0x09) return 3;
+		if (code === 0x09) return getTabWidth();
 	}
 
 	// Some marks occupy cells even without a base character.
@@ -259,17 +260,15 @@ export function visibleWidth(str: string): number {
 		return asciiWidth;
 	}
 
-	// Check cache
-	const cached = widthCache.get(str);
+	// Tab-containing Unicode strings have different widths under the two renderer policies.
+	const cacheKey = str.includes("\t") ? `${getTabWidth()}:${str}` : str;
+	const cached = widthCache.get(cacheKey);
 	if (cached !== undefined) {
 		return cached;
 	}
 
-	// Normalize: tabs to 3 spaces, strip ANSI escape codes
-	let clean = str;
-	if (str.includes("\t")) {
-		clean = clean.replace(/\t/g, "   ");
-	}
+	// Expand visible tabs, then strip ANSI escape codes.
+	let clean = expandTabs(str);
 	let escapeIndex = clean.indexOf("\x1b");
 	if (escapeIndex !== -1) {
 		// Strip supported ANSI/OSC/APC escape sequences in one pass.
@@ -304,7 +303,7 @@ export function visibleWidth(str: string): number {
 			widthCache.delete(firstKey);
 		}
 	}
-	widthCache.set(str, width);
+	widthCache.set(cacheKey, width);
 
 	return width;
 }
@@ -421,7 +420,7 @@ export function getOsc8LinkAtColumn(line: string, column: number): string | unde
 		let textEnd = i;
 		while (textEnd < line.length && !extractAnsiCode(line, textEnd)) textEnd++;
 		for (const { segment } of graphemeSegmenter.segment(line.slice(i, textEnd))) {
-			const width = segment === "\t" ? 3 : graphemeWidth(segment);
+			const width = graphemeWidth(segment);
 			if (column >= currentCol && column < currentCol + width) return activeUrl;
 			currentCol += width;
 		}
@@ -435,7 +434,7 @@ export function getOsc8LinkAtColumn(line: string, column: number): string | unde
  * Some terminals render precomposed Thai/Lao AM vowels inconsistently during
  * differential repaint. Their compatibility decompositions have the same cell
  * width but avoid stale-cell artifacts in terminal renderers. Visible tabs are
- * expanded to the fixed width used by layout so terminal tab stops cannot wrap
+ * expanded to the renderer-selected width used by layout so terminal tab stops cannot wrap
  * a logical line, while tabs inside terminal string sequences stay untouched.
  */
 const THAI_LAO_AM_REGEX = /[\u0e33\u0eb3]/;
@@ -448,18 +447,23 @@ export function normalizeTerminalOutput(str: string): string {
 			char === "\u0e33" ? "\u0e4d\u0e32" : "\u0ecd\u0eb2",
 		);
 	}
-	if (!normalized.includes("\t")) return normalized;
+	return expandTabs(normalized);
+}
 
+/** Expand visible tabs using the renderer policy, without modifying terminal control-sequence payloads. */
+export function expandTabs(str: string): string {
+	if (!str.includes("\t")) return str;
+	const spaces = " ".repeat(getTabWidth());
 	let result = "";
 	let i = 0;
-	while (i < normalized.length) {
-		const ansi = extractAnsiCode(normalized, i);
+	while (i < str.length) {
+		const ansi = extractAnsiCode(str, i);
 		if (ansi) {
 			result += ansi.code;
 			i += ansi.length;
 			continue;
 		}
-		result += normalized[i] === "\t" ? "   " : normalized[i];
+		result += str[i] === "\t" ? spaces : str[i];
 		i++;
 	}
 	return result;
@@ -486,7 +490,7 @@ function asciiVisibleWidth(str: string): number {
 			width++;
 			i++;
 		} else if (code === 0x09) {
-			width += 3;
+			width += getTabWidth();
 			i++;
 		} else if (code === 0x1b) {
 			const length = ansiCodeLength(str, i);
@@ -957,7 +961,7 @@ export function wrapTextWithAnsi(text: string, width: number): string[] {
 
 	// Handle newlines by processing each line separately
 	// Track ANSI state across lines so styles carry over after literal newlines
-	const inputLines = text.split(/\r\n|\r|\n/);
+	const inputLines = expandTabs(text).split(/\r\n|\r|\n/);
 	const result: string[] = [];
 	const tracker = new AnsiCodeTracker();
 
@@ -1257,18 +1261,18 @@ export function truncateToWidth(
 			}
 
 			if (text[i] === "\t") {
-				if (keepContiguousPrefix && keptWidth + 3 <= targetWidth) {
+				if (keepContiguousPrefix && keptWidth + getTabWidth() <= targetWidth) {
 					if (pendingAnsi) {
 						result += pendingAnsi;
 						pendingAnsi = "";
 					}
 					result += "\t";
-					keptWidth += 3;
+					keptWidth += getTabWidth();
 				} else {
 					keepContiguousPrefix = false;
 					pendingAnsi = "";
 				}
-				visibleSoFar += 3;
+				visibleSoFar += getTabWidth();
 				if (visibleSoFar > maxWidth) {
 					overflowed = true;
 					break;

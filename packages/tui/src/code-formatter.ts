@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { createRequire } from "node:module";
 import { Worker } from "node:worker_threads";
+import { getTabWidth } from "./tab-width.ts";
 
 interface Language {
 	plugin: string;
@@ -25,6 +26,7 @@ export interface CodeFormatRequest {
 	filePath: string;
 	code: string;
 	width: number;
+	tabWidth: number;
 }
 
 export interface CodeFormatResponse {
@@ -86,7 +88,8 @@ export class CodeFormatter {
 			return code;
 		}
 		const width = Math.max(1, Math.floor(availableWidth / 8) * 8);
-		const key = `${target.filePath}:${width}:${createHash("sha256").update(code).digest("hex")}`;
+		const tabWidth = getTabWidth(availableWidth);
+		const key = `${target.filePath}:${width}:${tabWidth}:${createHash("sha256").update(code).digest("hex")}`;
 		// Always leave room to cache at least the fallback, avoiding an endless miss/repaint loop.
 		if (2 * (key.length + code.length) > this.options.maxCacheBytes || this.options.maxCacheEntries < 1) {
 			return code;
@@ -105,7 +108,7 @@ export class CodeFormatter {
 		const task: Task = {
 			key,
 			plugin: target.plugin,
-			request: { filePath: target.filePath, code, width },
+			request: { filePath: target.filePath, code, width, tabWidth },
 			promise,
 			resolve,
 		};
@@ -165,7 +168,7 @@ export class CodeFormatter {
 				import.meta.url,
 			),
 			{
-				workerData: { pluginPath: require.resolve(`@dprint/${plugin}/plugin.wasm`) },
+				workerData: { plugin, pluginPath: require.resolve(`@dprint/${plugin}/plugin.wasm`) },
 				resourceLimits: { maxOldGenerationSizeMb: 64 },
 			},
 		);

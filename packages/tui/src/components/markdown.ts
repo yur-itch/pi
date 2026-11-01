@@ -2,9 +2,17 @@ import { Marked, type Token, Tokenizer, type TokenizerExtension, type Tokens, ty
 import markedCjkFriendly from "marked-cjk-friendly";
 import { codeFormatter, requestCodeFormatRender } from "../code-formatter.ts";
 import { renderLatex } from "../latex.ts";
+import { getTabWidth, withComponentWidth } from "../tab-width.ts";
 import { getCapabilities, hyperlink, isImageLine } from "../terminal-image.ts";
 import type { Component } from "../tui.ts";
-import { applyBackgroundToLine, cjkPunctuationRegex, flattenLines, visibleWidth, wrapTextWithAnsi } from "../utils.ts";
+import {
+	applyBackgroundToLine,
+	cjkPunctuationRegex,
+	expandTabs,
+	flattenLines,
+	visibleWidth,
+	wrapTextWithAnsi,
+} from "../utils.ts";
 
 const STRICT_STRIKETHROUGH_REGEX = /^(~~)(?=[^\s~])((?:\\.|[^\\])*?(?:\\.|[^\s~\\]))\1(?=[^~]|$)/;
 
@@ -271,6 +279,7 @@ interface InlineStyleContext {
 
 /** A top-level block of the last render, keyed by its source, reused by the next render. */
 interface RenderedBlock {
+	tabWidth: number;
 	/** Width and type of the following block (which decides the spacing) that the lines were rendered for. */
 	width: number;
 	nextTokenType: string | undefined;
@@ -298,6 +307,7 @@ export class Markdown implements Component {
 	// Cache for rendered output
 	private cachedText?: string;
 	private cachedWidth?: number;
+	private cachedTabWidth?: number;
 	private cachedLines?: string[];
 	// Parsed tokens depend only on the source, so they survive theme and width invalidation. Held weakly: a token tree is
 	// about ten times the size of its source, and every message of a long transcript keeps a Markdown component. The
@@ -349,10 +359,20 @@ export class Markdown implements Component {
 	}
 
 	render(width: number): string[] {
-		// Check cache
-		if (this.cachedLines && this.cachedText === this.text && this.cachedWidth === width) {
+		return withComponentWidth(width, () => this.renderMarkdown(width));
+	}
+
+	private renderMarkdown(width: number): string[] {
+		const tabWidth = getTabWidth();
+		if (
+			this.cachedLines &&
+			this.cachedText === this.text &&
+			this.cachedWidth === width &&
+			this.cachedTabWidth === tabWidth
+		) {
 			return this.cachedLines;
 		}
+		this.cachedTabWidth = tabWidth;
 
 		// Calculate available width for content (subtract horizontal padding)
 		const contentWidth = Math.max(1, width - this.paddingX * 2);
@@ -391,13 +411,14 @@ export class Markdown implements Component {
 			const nextTokenType = tokens[i + 1]?.type;
 			const reused = reuseBlocks ? (blocks.get(token.raw) ?? previousBlocks?.get(token.raw)) : undefined;
 			const block = reused ?? {
+				tabWidth: -1,
 				width: -1,
 				nextTokenType,
 				lines: [],
 				highlightedCode: new Map(),
 				pendingFormats: new Set(),
 			};
-			if (block.width !== width || block.nextTokenType !== nextTokenType) {
+			if (block.width !== width || block.tabWidth !== tabWidth || block.nextTokenType !== nextTokenType) {
 				this.renderBlock(block, token, nextTokenType, width, contentWidth);
 			}
 			for (const pending of block.pendingFormats) this.activeFormats.add(pending);
@@ -464,6 +485,7 @@ export class Markdown implements Component {
 		flattenLines(lines);
 		block.lines = lines;
 		block.width = width;
+		block.tabWidth = getTabWidth();
 		block.nextTokenType = nextTokenType;
 	}
 
@@ -632,7 +654,7 @@ export class Markdown implements Component {
 						this.watchFormat(formatted);
 					}
 				}
-				code = code.replace(/\t/g, "   ");
+				code = expandTabs(code);
 				lines.push(this.theme.codeBlockBorder(`\`\`\`${token.lang || ""}`));
 				if (this.theme.highlightCode) {
 					const key = `${token.lang ?? ""}\0${code}`;
@@ -768,7 +790,7 @@ export class Markdown implements Component {
 				}
 		}
 
-		return lines.map((line) => line.replace(/\t/g, "   "));
+		return lines.map((line) => expandTabs(line));
 	}
 
 	private watchFormat(pending: Promise<string>): void {
@@ -896,7 +918,7 @@ export class Markdown implements Component {
 			result = result.slice(0, -stylePrefix.length);
 		}
 
-		return result.replace(/\t/g, "   ");
+		return expandTabs(result);
 	}
 
 	private getOrderedListMarker(item: Tokens.ListItem): string | undefined {

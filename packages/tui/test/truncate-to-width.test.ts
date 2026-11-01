@@ -58,14 +58,14 @@ describe("truncateToWidth", () => {
 	});
 
 	it("keeps a contiguous prefix instead of skipping a wide grapheme and resuming later", () => {
-		const truncated = truncateToWidth("🙂\t界 \x1b_abc\x07", 7, "…", true);
+		const truncated = truncateToWidth("🙂\t界 \x1b_abc\x07", 6, "…", true);
 		assert.strictEqual(truncated, "🙂\t\x1b[0m…\x1b[0m ");
 	});
 });
 
 describe("visibleWidth", () => {
 	it("counts tabs inline and skips ANSI inline", () => {
-		assert.strictEqual(visibleWidth("\t\x1b[31m界\x1b[0m"), 5);
+		assert.strictEqual(visibleWidth("\t\x1b[31m界\x1b[0m"), 4);
 	});
 
 	it("counts Indic conjunct spacing code points within grapheme clusters", () => {

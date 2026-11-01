@@ -30,7 +30,7 @@ import type {
 	ToolRenderers,
 } from "../../core/extensions/types.ts";
 import { READ_MCP_RESOURCE_TOOL } from "../../core/mcp-servers.ts";
-import { formatToolCallWithArgs, getTextOutput, replaceTabs } from "../../core/tools/render-utils.ts";
+import { formatToolCallWithArgs, getTextOutput } from "../../core/tools/render-utils.ts";
 import { formatSize, truncateMiddle } from "../../core/tools/truncate.ts";
 import { keyHint } from "../../modes/interactive/components/keybinding-hints.ts";
 import { VisualLinePreview } from "../../modes/interactive/components/visual-truncate.ts";
@@ -364,7 +364,7 @@ export function createMcpToolRenderers(label: string): ToolRenderers {
 			const output = getTextOutput(result, context.showImages).trim();
 			if (!output) return component;
 			const color = context.isError ? "error" : "toolOutput";
-			const styled = replaceTabs(output)
+			const styled = output
 				.split("\n")
 				.map((line) => theme.fg(color, line))
 				.join("\n");

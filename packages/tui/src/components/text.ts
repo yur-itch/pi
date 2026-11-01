@@ -1,5 +1,6 @@
+import { getTabWidth, withComponentWidth } from "../tab-width.ts";
 import type { Component } from "../tui.ts";
-import { applyBackgroundToLine, flattenLines, visibleWidth, wrapTextWithAnsi } from "../utils.ts";
+import { applyBackgroundToLine, expandTabs, flattenLines, visibleWidth, wrapTextWithAnsi } from "../utils.ts";
 
 /**
  * Text component - displays multi-line text with word wrapping
@@ -13,6 +14,7 @@ export class Text implements Component {
 	// Cache for rendered output
 	private cachedText?: string;
 	private cachedWidth?: number;
+	private cachedTabWidth?: number;
 	private cachedLines?: string[];
 
 	constructor(text: string = "", paddingX: number = 1, paddingY: number = 1, customBgFn?: (text: string) => string) {
@@ -50,10 +52,21 @@ export class Text implements Component {
 	}
 
 	render(width: number): string[] {
-		// Check cache
-		if (this.cachedLines && this.cachedText === this.text && this.cachedWidth === width) {
+		return withComponentWidth(width, () => this.renderText(width));
+	}
+
+	private renderText(width: number): string[] {
+		// A fixed-width child can change tab policy when its enclosing terminal resizes.
+		const tabWidth = getTabWidth();
+		if (
+			this.cachedLines &&
+			this.cachedText === this.text &&
+			this.cachedWidth === width &&
+			this.cachedTabWidth === tabWidth
+		) {
 			return this.cachedLines;
 		}
+		this.cachedTabWidth = tabWidth;
 
 		// Don't render anything if there's no actual text
 		if (!this.text || this.text.trim() === "") {
@@ -64,8 +77,7 @@ export class Text implements Component {
 			return result;
 		}
 
-		// Replace tabs with 3 spaces
-		const normalizedText = this.text.replace(/\t/g, "   ");
+		const normalizedText = expandTabs(this.text);
 
 		// Reduce margins when necessary so content and padding fit within the available width.
 		const paddingX = Math.min(this.paddingX, Math.max(0, Math.floor((width - 1) / 2)));

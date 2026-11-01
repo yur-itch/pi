@@ -3,6 +3,7 @@ import { afterEach, describe, it, mock } from "node:test";
 import { setTimeout } from "node:timers/promises";
 import { codeFormatter } from "../src/code-formatter.ts";
 import { Markdown } from "../src/components/markdown.ts";
+import { withTerminalWidth } from "../src/tab-width.ts";
 import { TuiMainScreen } from "../src/tui-main-screen.ts";
 import { stripTerminalSequences, visibleWidth } from "../src/utils.ts";
 import { defaultMarkdownTheme } from "./test-themes.ts";
@@ -117,6 +118,19 @@ describe("Markdown code formatting", () => {
 			.map((line) => stripTerminalSequences(line).trim())
 			.join("");
 		assert.ok(content.includes("x".repeat(100)));
+	});
+
+	it("renders real formatter tabs with the enclosing terminal policy at the same code width", async () => {
+		const source = "function example(){if(active){run(firstArgument,secondArgument,thirdArgument)}}";
+		const markdown = new Markdown(`\`\`\`ts\n${source}\n\`\`\``, 0, 0, defaultMarkdownTheme);
+		for (const columns of [95, 96, 80]) {
+			const formatted = await withTerminalWidth(columns, () => codeFormatter.format(source, "ts", 38));
+			assert.match(formatted, /^\tif/m);
+			const lines = withTerminalWidth(columns, () => markdown.render(40)).map(stripTerminalSequences);
+			const tabWidth = columns < 96 ? 2 : 4;
+			assert.ok(lines.some((line) => line.trimEnd() === `${" ".repeat(2 + tabWidth)}if (active) {`));
+			assert.ok(lines.every((line) => visibleWidth(line) <= 40));
+		}
 	});
 
 	it("automatically repaints the live terminal when real formatting completes", async () => {

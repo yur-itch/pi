@@ -9,7 +9,7 @@
 
 import { Container, Spacer, Text } from "@earendil-works/pi-tui";
 import type { ToolDefinition } from "../../core/extensions/types.ts";
-import { getTextOutput, replaceTabs, startToolTimer, str, toolTimerText } from "../../core/tools/render-utils.ts";
+import { getTextOutput, startToolTimer, str, toolTimerText } from "../../core/tools/render-utils.ts";
 import { keyHint } from "../../modes/interactive/components/keybinding-hints.ts";
 import { VisualLinePreview } from "../../modes/interactive/components/visual-truncate.ts";
 import { CodeHighlighter, type Theme } from "../../modes/interactive/theme/theme.ts";
@@ -88,7 +88,7 @@ export const codemodeRenderers: Pick<
 			const state = context.state as CodemodeRenderState;
 			state.scriptHighlighter ??= new CodeHighlighter();
 			const highlighted = state.scriptHighlighter
-				.highlight(replaceTabs(code.replace(/\r/g, "").trimEnd()), "javascript")
+				.highlight(code.replace(/\r/g, "").trimEnd(), "javascript")
 				.join("\n");
 			component.addChild(
 				context.expanded
@@ -135,7 +135,7 @@ export const codemodeRenderers: Pick<
 			: getTextOutput({ ...result, content: hasHeader ? rest : result.content }, context.showImages).trim();
 		if (output) {
 			const color = context.isError ? "error" : "toolOutput";
-			const styled = replaceTabs(output)
+			const styled = output
 				.split("\n")
 				.map((line) => theme.fg(color, line))
 				.join("\n");

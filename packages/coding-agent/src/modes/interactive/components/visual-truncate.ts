@@ -3,7 +3,7 @@
  * Used by tool renderers and bash-execution.ts for consistent behavior.
  */
 
-import { type Component, Text, truncateToWidth } from "@earendil-works/pi-tui";
+import { type Component, getTabWidth, Text, truncateToWidth } from "@earendil-works/pi-tui";
 
 export interface VisualTruncateResult {
 	/** The visual lines to display */
@@ -64,11 +64,12 @@ export interface VisualLinePreviewOptions {
 /**
  * Collapsed tool output limited to a number of visual lines, like bash output. Limiting logical
  * lines instead lets a single long line (such as minified JSON) wrap across the whole screen.
- * Caches its lines per width, since it renders on every frame for every result in the transcript.
+ * Caches its lines per width and tab policy, since it renders on every frame for every result in the transcript.
  */
 export class VisualLinePreview implements Component {
 	private options: VisualLinePreviewOptions;
 	private cachedWidth: number | undefined;
+	private cachedTabWidth: number | undefined;
 	private cachedLines: string[] | undefined;
 
 	constructor(options: VisualLinePreviewOptions) {
@@ -76,7 +77,8 @@ export class VisualLinePreview implements Component {
 	}
 
 	render(width: number): string[] {
-		if (this.cachedLines === undefined || this.cachedWidth !== width) {
+		const tabWidth = getTabWidth(width);
+		if (this.cachedLines === undefined || this.cachedWidth !== width || this.cachedTabWidth !== tabWidth) {
 			const { text, maxVisualLines, keep, formatHint } = this.options;
 			const preview = truncateToVisualLines(text, maxVisualLines, width, 0, keep);
 			const lines = preview.visualLines;
@@ -87,6 +89,7 @@ export class VisualLinePreview implements Component {
 				this.cachedLines = lines;
 			}
 			this.cachedWidth = width;
+			this.cachedTabWidth = tabWidth;
 		}
 		return this.cachedLines;
 	}

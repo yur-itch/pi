@@ -10,8 +10,8 @@ describe("visibleWidth", () => {
 		assert.strictEqual(visibleWidth("\x1b_pi:c\x07cursor"), 6);
 	});
 
-	it("counts tabs as three columns in styled text", () => {
-		assert.strictEqual(visibleWidth("\x1b[1ma\tb\x1b[22m"), 5);
+	it("defaults to compact two-column tabs outside a renderer", () => {
+		assert.strictEqual(visibleWidth("\x1b[1ma\tb\x1b[22m"), 4);
 	});
 
 	it("measures styled non-ASCII text", () => {

@@ -42,10 +42,6 @@ export function formatReadLineRange(offset: unknown, limit: unknown): string {
 	return `:${start}${end ? `-${end}` : ""}`;
 }
 
-export function replaceTabs(text: string): string {
-	return text.replace(/\t/g, "   ");
-}
-
 export function normalizeDisplayText(text: string): string {
 	return text.replace(/\r/g, "");
 }
@@ -100,7 +96,7 @@ export function formatToolCallWithArgs(title: string, args: unknown, theme: Them
 	if (expanded) {
 		const lines = entries.map(([key, value]) => {
 			const text = typeof value === "string" ? value : (JSON.stringify(value, null, 2) ?? String(value));
-			return `  ${key}: ${replaceTabs(text).replace(/\r/g, "").split("\n").join("\n    ")}`;
+			return `  ${key}: ${text.replace(/\r/g, "").split("\n").join("\n    ")}`;
 		});
 		return `${header}\n${theme.fg("muted", lines.join("\n"))}`;
 	}
